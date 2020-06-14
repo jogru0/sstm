@@ -1,0 +1,3 @@
+[submodule "submodules/cool"]
+	path = submodules/cool
+	url = ssh://git@git.tset.cloud:2022/geom/cool-library.git

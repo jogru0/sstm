@@ -1,0 +1,53 @@
+---
+Checks: '*,
+-google-readability-todo,
+-readability-magic-numbers,
+-cppcoreguidelines-avoid-magic-numbers,
+-llvm-include-order,
+-llvm-header-guard,
+-fuchsia-default-arguments,
+-fuchsia-default-arguments-calls,
+-fuchsia-default-arguments-declarations,
+-fuchsia-statically-constructed-objects,
+-fuchsia-overloaded-operator,
+-fuchsia-trailing-return,
+-cppcoreguidelines-macro-usage,
+-google-runtime-references,
+-cert-dcl21-cpp,
+-readability-named-parameter,
+-readability-braces-around-statements,
+-hicpp-braces-around-statements,
+-google-readability-braces-around-statements,
+-bugprone-suspicious-semicolon,
+-readability-misleading-indentation,
+-cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+-hicpp-no-array-decay,
+-cert-dcl58-cpp,
+-readability-redundant-declaration,
+-bugprone-macro-parentheses,
+-misc-non-private-member-variables-in-classes,
+-cppcoreguidelines-non-private-member-variables-in-classes,
+-modernize-use-trailing-return-type,
+-readability-redundant-member-init,
+-misc-static-assert,
+-cert-dcl03-c,
+-hicpp-static-assert,
+-google-build-using-namespace,
+-cppcoreguidelines-pro-bounds-constant-array-index,
+-readability-uppercase-literal-suffix,
+-hicpp-uppercase-literal-suffix,
+-readability-implicit-bool-conversion,
+-cppcoreguidelines-pro-type-union-access,
+-hicpp-signed-bitwise,
+-modernize-use-default-member-init,
+-readability-redundant-access-specifiers'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle:     none
+User:            Jonathan Gruner
+CheckOptions:    
+ - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+   value: '1'
+ - key: hicpp-signed-bitwise.IgnorePositiveIntegerLiterals
+   value: '1'
