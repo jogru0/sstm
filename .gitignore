@@ -1,6 +1,7 @@
 output
 build/
 bin/
+saves
 venv/
 files_for_plotting/
 .idea
