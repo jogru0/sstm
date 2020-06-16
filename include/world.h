@@ -58,9 +58,12 @@ namespace sstm {
 		std::unordered_map<Entity, std::optional<Model>> maybe_models;
 		std::vector<std::vector<std::vector<Entity>>> grid;
 		Shader shader;
+		Shader text_shader;
 
 		std::vector<Level> levels;
 		size_t loaded_level_id;
+
+		size_t number_of_steps;
 
 		std::optional<stdc::fs::path> maybe_path_previous_save;
 		//Current is saved iff non-empty, in that case it is on top.
@@ -70,6 +73,8 @@ namespace sstm {
 
 		Camera camera;
 		float fov_vert = glm::radians(60.f);
+
+		std::vector<size_t> high_scores;
 
 		
 		[[nodiscard]] const auto &entity_at(const glm::ivec3 &pos) const {
@@ -95,6 +100,8 @@ namespace sstm {
 
 			std::cout << "Loading level " << level_id << ".\n";
 			loaded_level_id = level_id;
+
+			number_of_steps = 0;
 
 			const auto &level = levels[level_id];
 			grid = std::vector(level.size(), std::vector<std::vector<Entity>>(2));
@@ -222,6 +229,43 @@ namespace sstm {
 			return save_path;
 		}
 
+		void deserialize_high_scores() {
+			using namespace stdc::literals;
+			
+			assert(high_scores.empty());
+			
+			auto save_folder = stdc::fs::path{"saves"s};
+			auto high_scores_path = save_folder / "high_scores";
+
+			if (!stdc::fs::exists(high_scores_path)) {
+				//TODO
+				high_scores = std::vector(levels.size(), stdc::nullid);
+				return;
+			}
+			
+			auto is = std::ifstream{high_scores_path};
+			auto ia = boost::archive::text_iarchive{is};
+			
+			ia >> high_scores;
+			assert(high_scores.size() == levels.size()); 
+
+		}
+
+		void serialize_high_scores() {
+			using namespace stdc::literals;
+			
+			assert(high_scores.size() == levels.size());
+			
+			auto save_folder = stdc::fs::path{"saves"s};
+			auto i = 0;
+			auto high_scores_path = save_folder / "high_scores";
+
+			auto os = std::ofstream{high_scores_path};
+			auto oa = boost::archive::text_oarchive{os};
+			
+			oa << high_scores;
+		}
+
 		void maybe_revert_to_previous_save() {
 			using namespace stdc::literals;
 			
@@ -270,15 +314,15 @@ namespace sstm {
 			turns = std::move(saved_turns);
 		}
 
-
-
-
 		World() :
 			controlled_pos{},
 			shader{"shader.vs", "shader.fs"},
+			text_shader{"font_shader.vs", "font_shader.fs"},
 			loaded_level_id{},
+			number_of_steps{},
 			maybe_path_previous_save{},
-			next_turn_id{}
+			next_turn_id{},
+			high_scores{}
 		{
 
 			WATCH("box").reset();
@@ -315,8 +359,16 @@ namespace sstm {
 			
 			levels = parse_collection("/home/jgr/Downloads/level/Homz _Challenge/Homz Challenge.txt");
 			std::cout << "Parsed levels: " << levels.size() << ".\n";
+
+			deserialize_high_scores();
+
 			assert(!levels.empty());
 			load_level(0);
+		}
+
+		//TODO
+		~World() {
+			serialize_high_scores();
 		}
 
 		[[nodiscard]] auto is_in_bounds(const glm::ivec3 &pos) const -> bool {
@@ -327,6 +379,11 @@ namespace sstm {
 
 		void check_goals() {
 			if (satisfies_goal_condition()) {
+				//TODO
+				if (high_scores[loaded_level_id] > next_turn_id) {
+					std::cout << "New high score! " << next_turn_id << " instead of " << high_scores[loaded_level_id] << ".\n";
+				}
+				stdc::minimize(high_scores[loaded_level_id], next_turn_id);
 				--next_turn_id;
 				load_next_level();
 			}
@@ -433,7 +490,7 @@ namespace sstm {
 
 			auto turn = turns[next_turn_id];
 			++next_turn_id;
-
+			
 			for (const auto &change : turn) {
 				apply(change);
 			}
@@ -514,7 +571,9 @@ namespace sstm {
 
 	private:
 		std::vector<Turn> turns;
+	public: //TODO
 		size_t next_turn_id;
+	private:
 
 	public:
 		void reload_level() {
@@ -533,6 +592,14 @@ namespace sstm {
 
 			transition_to_level(loaded_level_id + 1);
 		}
+
+		void load_previous_level() {
+			if (!loaded_level_id) {
+				return;
+			}
+
+			transition_to_level(loaded_level_id - 1);
+		}
 	}; //World
 
 
@@ -540,6 +607,7 @@ namespace sstm {
 	[[nodiscard]] auto deserialize_save(const stdc::fs::path &load_path) -> std::tuple<size_t, std::vector<typename World::Turn>, std::optional<stdc::fs::path>> {
 	using namespace stdc::literals;
 	
+	//TODO: Robustness agains users changing files etc
 	assert(stdc::fs::exists(load_path));
 	auto is = std::ifstream{load_path};
 	auto ia = boost::archive::text_iarchive{is};
