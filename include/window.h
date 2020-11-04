@@ -11,67 +11,21 @@
 #include <cassert>
 #include <memory>
 #include <cmath>
+#include <string_view>
 
+#include "text_renderer.h"
 
-struct Character {
-	unsigned int TextureID;  // ID handle of the glyph texture
-	glm::ivec2   Size;       // Size of glyph
-	glm::ivec2   Bearing;    // Offset from baseline to left/top of glyph
-	unsigned int Advance;    // Offset to advance to next glyph
-};
-
-std::unordered_map<char, Character> Characters;
-
-unsigned int VAO, VBO;
-
-
-// render line of text
-// -------------------
-void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color)
-{
-    // activate corresponding render state	
-    shader.use();
-    shader.setVec3("textColor", color);
-    glActiveTexture(GL_TEXTURE0);
-    glBindVertexArray(VAO);
-
-    // iterate through all characters
-    std::string::const_iterator c;
-    for (c = text.begin(); c != text.end(); c++) 
-    {
-        Character ch = Characters[*c];
-
-        float xpos = x + ch.Bearing.x * scale;
-        float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
-
-        float w = ch.Size.x * scale;
-        float h = ch.Size.y * scale;
-        // update VBO for each character
-        float vertices[6][4] = {
-            { xpos,     ypos + h,   0.0f, 0.0f },            
-            { xpos,     ypos,       0.0f, 1.0f },
-            { xpos + w, ypos,       1.0f, 1.0f },
-
-            { xpos,     ypos + h,   0.0f, 0.0f },
-            { xpos + w, ypos,       1.0f, 1.0f },
-            { xpos + w, ypos + h,   1.0f, 0.0f }           
-        };
-        // render glyph texture over quad
-        glBindTexture(GL_TEXTURE_2D, ch.TextureID);
-        // update content of VBO memory
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        // render quad
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
-        x += (ch.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
-    }
-    glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_2D, 0);
+inline void setup_opengl() {
+	if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) { //NOLINT
+		throw std::runtime_error{"Failed to initialize GLAD."};
+	}
+	
+	glEnable(GL_MULTISAMPLE);
+	glEnable(GL_DEPTH_TEST);	
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
-
 
 namespace sstm {
 	class MainWindow {
@@ -88,6 +42,8 @@ namespace sstm {
 		bool mouse_tracked = false;
 		bool last_mouse_position_set = false;
 
+		TextRenderer text_renderer = TextRenderer{-1};
+
 	
 
 	public:
@@ -98,7 +54,7 @@ namespace sstm {
 			return glfwWindowShouldClose(handle);
 		}
 
-		[[nodiscard]] auto get_aspect_ratio() const {
+		[[nodiscard]] auto get_desired_aspect_ratio() const {
 			return static_cast<float>(aspect_ratio_hori) / static_cast<float>(aspect_ratio_vert);
 		}
 
@@ -121,21 +77,18 @@ namespace sstm {
 			auto initial_width = 802;
 			auto initial_height = 200;
 
+			
 			handle = glfwCreateWindow(initial_width, initial_height, "sstm", nullptr, nullptr);
 			if (!handle) {
 				throw std::runtime_error{"Failed to create main window."};
 			}
-			
 
 			glfwMakeContextCurrent(handle);
 			
+			setup_opengl();
 			
-			if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) { //NOLINT
-				throw std::runtime_error{"Failed to initialize GLAD."};
-			}
-				
-			glEnable(GL_MULTISAMPLE);
 
+			text_renderer = TextRenderer{};
 			
     		world_ptr = std::make_unique<World>();
 
@@ -154,14 +107,14 @@ namespace sstm {
 			throw;
 		}
 
-		~MainWindow() noexcept {
-			glfwDestroyWindow(handle);
-			glfwTerminate();
-		}
 		constexpr MainWindow(const This &) = delete;
 		constexpr auto operator=(const This &) & -> MainWindow & = delete;
 		constexpr MainWindow(This &&) noexcept = delete;
 		constexpr auto operator=(This &&) &noexcept-> MainWindow & = delete;
+		~MainWindow() noexcept {
+			glfwDestroyWindow(handle);
+			glfwTerminate();
+		}
 
 		// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 		// ---------------------------------------------------------------------------------------------------------
@@ -244,10 +197,10 @@ namespace sstm {
 
 			auto viewport_data = std::array<GLint, 4>{};
 			glGetIntegerv(GL_VIEWPORT, viewport_data.data());
-			auto width = viewport_data[2];
-			auto height = viewport_data[3];
-			assert(static_cast<float>(width) / static_cast<float>(height) - get_aspect_ratio() < .001f);
-
+			auto width = static_cast<float>(viewport_data[2]);
+			auto height = static_cast<float>(viewport_data[3]);
+			auto actual_aspect_ratio = width / height;
+			
 			glDisable(GL_SCISSOR_TEST);
 			glClearColor(0.f, 0.f, 0.f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -266,7 +219,7 @@ namespace sstm {
 			// view/projection transformations
 			auto center = glm::vec3{.5f, .5f, .5f} + glm::vec3{world_ptr->controlled_pos};
 
-			glm::mat4 projection = glm::infinitePerspective(world_ptr->fov_vert, get_aspect_ratio(), 0.1f);
+			glm::mat4 projection = glm::infinitePerspective(world_ptr->fov_vert, actual_aspect_ratio, 0.1f);
 			glm::mat4 view = world_ptr->camera.GetViewMatrix(center, deltaTime);
 			world_ptr->shader.setMat4("projection", projection);
 			world_ptr->shader.setMat4("view", view);
@@ -333,17 +286,17 @@ namespace sstm {
 
 
 			//TEXT
+
 			//TODO
-			glm::mat4 text_projection = glm::ortho(0.0f, static_cast<float>(width), 0.0f, static_cast<float>(height));
+			glm::mat4 text_projection = glm::ortho(0.0f, width, 0.0f, height);
 			world_ptr->text_shader.use();
 			//TODO: glm::value_ptr?
 			world_ptr->text_shader.setMat4("projection", text_projection);
 
-			auto scale = width / 1000.f;
 			auto t_x = 0.024f * width;
 			auto t_y = 0.02f * width;
 			
-			RenderText(world_ptr->text_shader, std::to_string(world_ptr->next_turn_id) + "/" + std::to_string(world_ptr->high_scores[world_ptr->loaded_level_id]), t_x, t_y, scale, glm::vec3(0.5, 0.8f, 0.2f));
+		text_renderer.render_text(world_ptr->text_shader, std::to_string(world_ptr->next_turn_id) + "/" + std::to_string(world_ptr->high_scores[world_ptr->loaded_level_id]), t_x, t_y, /*scale*/ 1, glm::vec3(0.5, 0.8f, 0.2f));
 		
 
 			//show what we got.
@@ -382,7 +335,7 @@ namespace sstm {
 		static void framebuffer_size_callback(GLFWwindow *handle, int width, int height) {
 			auto &window = *static_cast<This*>(glfwGetWindowUserPointer(handle));
 			
-			auto aspect_ratio = window.get_aspect_ratio();
+			auto aspect_ratio = window.get_desired_aspect_ratio();
 			auto window_aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
 
 			auto x_offset = 0;

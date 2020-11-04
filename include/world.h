@@ -47,6 +47,8 @@ namespace sstm {
 	class World {
 
 	private:
+		using This = World;
+
 		enum class Entity {
 			Nothing = 0,
 			Wall, Ground, Player, Goal, Box
@@ -251,13 +253,12 @@ namespace sstm {
 
 		}
 
-		void serialize_high_scores() {
+		void serialize_high_scores() const {
 			using namespace stdc::literals;
 			
 			assert(high_scores.size() == levels.size());
 			
 			auto save_folder = stdc::fs::path{"saves"s};
-			auto i = 0;
 			auto high_scores_path = save_folder / "high_scores";
 
 			auto os = std::ofstream{high_scores_path};
@@ -321,8 +322,8 @@ namespace sstm {
 			loaded_level_id{},
 			number_of_steps{},
 			maybe_path_previous_save{},
-			next_turn_id{},
-			high_scores{}
+			high_scores{},
+			next_turn_id{}
 		{
 
 			WATCH("box").reset();
@@ -366,7 +367,12 @@ namespace sstm {
 			load_level(0);
 		}
 
-		//TODO
+
+
+		constexpr World(const This &) = delete;
+		constexpr auto operator=(const This &) & -> World & = delete;
+		constexpr World(This &&) noexcept = delete;
+		constexpr auto operator=(This &&) &noexcept-> World & = delete;
 		~World() {
 			serialize_high_scores();
 		}

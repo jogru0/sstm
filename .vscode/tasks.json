@@ -29,7 +29,7 @@
             "label": "Tidy",
             "group": "test",
             "type": "shell",
-            "command": "clear && clang-tidy src/main.cpp -- -std=c++2a -iquote include -I submodules -isystem external_header",
+            "command": "clear && clang-tidy src/main.cpp -- -std=c++20 -iquote include -I submodules -isystem external_header -isystem /usr/include/freetype2",
             "problemMatcher": {
                 "base": "$gcc",
                 "fileLocation": "absolute"

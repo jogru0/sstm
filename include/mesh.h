@@ -96,6 +96,7 @@ namespace sstm {
 			glBindVertexArray(0);
 
 			// always good practice to set everything back to defaults once configured.
+			//TODO: Wieso anders als bei Text?
 			glActiveTexture(GL_TEXTURE0);
 		}
 
