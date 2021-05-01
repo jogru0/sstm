@@ -112,7 +112,8 @@ namespace sstm {
 		constexpr MainWindow(This &&) noexcept = delete;
 		constexpr auto operator=(This &&) &noexcept-> MainWindow & = delete;
 		~MainWindow() noexcept {
-			glfwDestroyWindow(handle);
+			//glfwTerminate already destroys all windows.
+			//glfwDestroyWindow(handle);
 			glfwTerminate();
 		}
 
